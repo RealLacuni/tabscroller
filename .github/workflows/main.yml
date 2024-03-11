@@ -1,0 +1,90 @@
+name: Package & Release
+
+on:
+  push:
+    tags:
+      - '*' 
+
+jobs:
+  build:
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+       token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '21.1.0'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build Electron app
+      run: |
+        case ${{ matrix.os }} in
+          'windows-latest')
+            npm run dist:win
+            ;;
+          'macos-latest')
+            npm run dist:mac
+            ;;
+          'ubuntu-latest')
+            npm run dist:linux
+            ;;
+        esac
+
+    - name: Archive build artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: dist-${{ matrix.os }}
+        path: dist/*
+        
+  release:
+      needs: [build]
+      runs-on: ubuntu-latest
+      permissions:
+        contents: write
+        pull-requests: write
+      steps:
+      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Download build artifacts
+        uses: actions/download-artifact@v2
+        # no params should default to downloading all artifacts.
+              
+
+      - name: Merge build artifacts
+        run: |
+          cp -R dist-linux/. dist/
+          cp -R dist-mac/. dist/
+          cp -R dist-win/. dist/
+          
+      - name: Print Current Directory Contents
+        run: ls -al dist
+          
+      - name: Build Changelog
+        id: github_release
+        uses: mikepenz/release-changelog-builder-action@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Action
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**
+            CHANGELOG.md
+       
+
+        
